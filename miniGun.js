@@ -131,16 +131,16 @@ Gun = (() => {
             return new Proxy(new gunUser(pair), miniGunHandler)
         },
         sign: async function(data) {
-            return await SEAlite.sign(data, this.priv)
+            return await SEAlite.sign(data, this['#'].priv)
         },
-        verify: async function(data, signature, foreignPub = this.pub) {
+        verify: async function(data, signature, foreignPub = this['#'].pub) {
             return await SEAlite.verify(data, signature, foreignPub)
         },
-        encrypt: async function(data, foreignPub = this.epub) {
-            return await SEAlite.encrypt(data, await SEAlite.secret(foreignPub, this.epriv))
+        encrypt: async function(data, foreignPub = this['#'].epub) {
+            return await SEAlite.encrypt(data, await SEAlite.secret(foreignPub, this['#'].epriv))
         },
-        decrypt: async function(encData, foreignPub = this.epub) {
-            return await SEAlite.decrypt(encData, await SEAlite.secret(foreignPub, this.epriv))
+        decrypt: async function(encData, foreignPub = this['#'].epub) {
+            return await SEAlite.decrypt(encData, await SEAlite.secret(foreignPub, this['#'].epriv))
         }
     },
     // temp storage helper
