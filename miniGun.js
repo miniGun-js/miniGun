@@ -28,27 +28,25 @@ miniGun = () => {
             }
         }).flat()
     },
-    handleGunNode = (soul, node = {}, createIfNotExists = true) => {
-        let resultNode
-        if(!node && soul) {
-            // retrieve node by soul
+    handleGunNode = (soul, node = {}, path = [], createIfNotExists = true) => {
+        //console.log("handleGunNode", soul, path, node, createIfNotExists)
+        let resultNode = {['#']: {}}
+        if(!soul && (node['#'] && node['#'].soul)) {
+            soul = node['#'].soul
+        }
+        if(soul) {
             resultNode = taskMgr.emit('load', soul)
-            if(resultNode) {
-                createIfNotExists = false
-            } else {
-                resultNode = { ['#']: { soul: soul } }
-            }
-        } else if(node && soul) {
-            // retrieve and merge existing node
-            resultNode = taskMgr.emit('load', soul) 
-            if(!resultNode) {
-                resultNode = { ['#']: { soul: soul } }
-            }
-            Object.assign(resultNode, node)
+            console.log("DIFF?", resultNode, node)
         } 
-        resultNode = new Gun(resultNode)
+        if(!resultNode) {
+            resultNode = { ['#']: { soul: soul}}
+        }
+        // merge existing / base and given node param object
+        resultNode = new Gun(
+            Object.assign(resultNode, node), 
+            path
+        ) 
         if(createIfNotExists) {
-            // save (merged / changed) node
             if(!resultNode.soul()) {
                 resultNode['#'].soul = generateSoul()
             }
@@ -56,33 +54,40 @@ miniGun = () => {
         }
         return resultNode
     },
-    graphology = function(gunPath) {
+    graphology = function(gunPath, createIfNotExists = true) {
         let
         // Initial need graph root path...
-        endOfPathKey = gunPath.slice(-1),
+        endOfPathKey = gunPath.slice(-1)[0],
+        secondLastPathKey = gunPath.slice(-2, -1)[0],
         rootSoul = gunPath[0],
         currentPath = [rootSoul],
         // get and optionally create graph root node...
         //console.log("DEUG", path[0])
-        currentNode = handleGunNode(rootSoul)
-        console.log("graphology::ROOT", currentPath, gunPath, currentNode)
+        currentNode = handleGunNode(rootSoul)   // create because root will be needed later...
+        //console.log("graphology::ROOT", currentPath, gunPath, `lastKey=${endOfPathKey}`, `secondLastKey=${secondLastPathKey}`, currentNode)
         // handle all sub path parts...
-        gunPath.slice(1).forEach(key => {
+        //gunPath.slice(1).forEach(key => {
+        for (let key of gunPath.slice(1)) {
             currentPath.push(key)
-            //console.log("graphology", key, currentPath, path)
+            //console.log("graphology", key, currentPath, gunPath, `${gunPath.slice(-2, -1)} == ${key}`)
             if(key == endOfPathKey) {
                 return currentNode
             } else if(currentNode[key] && currentNode[key][0] == '#') {
-                currentNode = handleGunNode(currentNode[key])
+                currentNode = handleGunNode(currentNode[key], {}, currentPath)
+            } else if(secondLastPathKey == key && !createIfNotExists) {
+                //console.log("Second last path key... Create and return a temp node without save to storage", key, currentPath)
+                return handleGunNode(null, { [endOfPathKey]: null, ['#']: {parent: currentNode.soul(), parentKey: key, tmp: true }}, currentPath, false)
+            } else if(!createIfNotExists) { // case "get()"?
+                //console.log("Shouldn't create persistent graph nodes e.g. GET() call... Return a temp object here..., need to walk graph later to handle parent...")
+                return handleGunNode(null, { [endOfPathKey]: null, ['#']: {parent: null, parentKey: secondLastPathKey, tmp: true }}, gunPath, false)   
             } else {
-                let newNode = handleGunNode()
-                console.log("CREATE", newNode)
+                let newNode = handleGunNode(null, { ['#']: {parent: currentNode.soul(), parentKey: key }}, currentPath, createIfNotExists)
                 currentNode[key] = newNode.soul()
-                handleGunNode(currentNode.soul(), currentNode)
+                handleGunNode(currentNode.soul(), currentNode, currentNode.path())
                 //console.log('DEBUG', currentNode, newNode)
                 currentNode = newNode
             }
-        })
+        }
         return currentNode
     },
     //miniGUN API features
@@ -94,19 +99,22 @@ miniGun = () => {
             })
         },
         load: (key) => {
-            console.log("miniGun::load - retrieve node from graph", key)
-            return JSON.parse(localStorage.getItem(key))
+            let node = JSON.parse(localStorage.getItem(key))
+            console.log("miniGun::load - retrieve node from graph", key, node)
+            return node
         },
-        store: (key, value) => {
-            console.log("miniGun::store - save node from graph", key, value)
-            localStorage.setItem(key, JSON.stringify(value))
+        store: (key, node) => {
+            console.log("miniGun::store - save node to graph", key, node)
+            localStorage.setItem(key, JSON.stringify(node))
         },
         // Gun API
         get: function(path) {
             let 
             newPath = pathToArray(this.path(), path),
-            newObject = new Proxy(new Gun({}, newPath), miniGunHandler)
-            console.log("Gun::GET", `InputPath="${path}"`, `NewPath="${newPath.join(pathDelimiter)}"`, "returnObject:", newObject, "thisArg", this)
+            //newObject = new Proxy(new Gun({}, newPath), miniGunHandler)
+            newObject = graphology(newPath, false)  // false = try to get graph node, but don't build the hole graph if not exists...
+            newObject = new Proxy(newObject, miniGunHandler)
+            //console.log("Gun::GET", `InputPath="${path}"`, `NewPath="${newPath.join(pathDelimiter)}"`, "returnObject:", newObject, "thisArg", this)
             return newObject
         },
         put: function(value) {
@@ -114,8 +122,8 @@ miniGun = () => {
             key = this.path().slice(-1),
             node = graphology(this.path())
             node[key] = value
-            handleGunNode(node.soul(), node)
-            console.log("Gun::PUT", `Path="${path}"`, key, value, "returnObject:", node, "thisArg", this)
+            node = handleGunNode(node.soul(), node, this.path())
+            //console.log("Gun::PUT", `Path="${this.path()}", ${key}="${value}"`, "returnObject:", node, "thisArg", this)
             return node
         },
         set: function(obj) {
@@ -153,7 +161,7 @@ miniGun = () => {
         decrypt: async function(encData, foreignPub = this['#'].epub) {
             return await SEAlite.decrypt(encData, await SEAlite.secret(foreignPub, this['#'].epriv))
         }
-    }
+    },
 
     Gun = class {
         ['#'] = {} 
@@ -175,7 +183,7 @@ miniGun = () => {
         path() {
             return this.#path
         }
-    }
+    },
 
     User = class extends Gun {
         constructor(userPair, features = ['encrypt', 'decrypt', 'sign', 'verify']) {
@@ -196,10 +204,13 @@ miniGun = () => {
         alias() {
             return this['#'].alias
         }
-    }
+    },
+
+    miniGunCoreInstance = new Proxy(new Gun({['#']: {soul: globalGraphRoot}}, [globalGraphRoot], ['pair', 'user', 'fn']), miniGunHandler)
 
     // add api features as xT tasks
     gunApiFeatures.fn(gunApiFeatures)
     
-    return new Proxy(new Gun({}, [globalGraphRoot], ['pair', 'user', 'fn']), miniGunHandler)
+    return miniGunCoreInstance
+    // per handle gun node method ?!
 }
