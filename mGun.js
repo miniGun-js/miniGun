@@ -35,8 +35,8 @@ mGun = function(opts = {}) {
             baseObject, 
             { 
                 ['#']: {}, 
-                ['>']: {}, 
-                ['!']: {}, 
+                //['>']: {}, 
+                //['!']: {}, 
                 ['?']: features
             }, 
             inputObject 
@@ -87,6 +87,20 @@ mGun = function(opts = {}) {
     },
 
     mGunAPI = {
+        // Storage adapter
+        load: function(...args) {
+            // get as array of (single) property OR property => value pairs
+            console.log(arguments.callee.name, args, this['#'], this)
+        },
+        save: function(...args) {
+            // object -> save as property => value 
+            // primitive -> save as key => value
+            console.log(arguments.callee.name, args, this['#'], this)
+        },
+        merge: function(...args) {
+            console.log(arguments.callee.name, args, this['#'], this)
+            // merge two mGun Nodes by timestamps...
+        },
         // mGun base API features
         /**
          * @todo single node vs nodelist ?
@@ -95,7 +109,7 @@ mGun = function(opts = {}) {
         get: function(path) {
             console.log(arguments.callee.name, path, this['#'], this)
             path = this['#'].path + GunPathDelimiter + path
-            return createGunItem( { ['#']: { path: path } } )
+            return createGunItem( { ['#']: { path: path }, ['>']: {} } )
         },
         put: function(value) {
             console.log(arguments.callee.name, value, this['#'], this)
@@ -139,13 +153,10 @@ mGun = function(opts = {}) {
                     epub: epub,
                     alias: alias
                 },
-                [ ... apiFeaturesBaseGun, 'encrypt', 'decrypt', 'sign', 'verify', 'export', 'contact' ],
+                [ /*...apiFeaturesBaseGun*/'get', 'encrypt', 'decrypt', 'sign', 'verify', 'export', 'contact' ],
                 new User()  // base object / type
             )
         },
-        /**
-         * @todo 1:n group signing ? 
-         */
         sign: async function(data) {
             return await mGunSEA.sign(data, this['!'].priv)
         },
@@ -198,5 +209,5 @@ mGun = function(opts = {}) {
     /**
      * @todo base features without path based like on, once, put, set... ?
      */
-    return mGun['$'] = createGunItem( {['#']: { path: globalRoot, soul: globalRoot } }, [ ...apiFeaturesBaseGun, 'user' ] )
+    return mGun['$'] = createGunItem( {['#']: { path: globalRoot, soul: globalRoot } }, [ /*...apiFeaturesBaseGun*/'get', 'user' ] )
 }
