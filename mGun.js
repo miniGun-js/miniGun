@@ -206,8 +206,5 @@ mGun = function(opts = {}) {
     Object.entries(mGunAPI).forEach(([feature, action]) => xTmGun.on(feature, action))
 
     // one-time initalization finished, return mGun root object
-    /**
-     * @todo base features without path based like on, once, put, set... ?
-     */
     return mGun['$'] = createGunItem( {['#']: { path: globalRoot, soul: globalRoot } }, [ /*...apiFeaturesBaseGun*/'get', 'user' ] )
 }
