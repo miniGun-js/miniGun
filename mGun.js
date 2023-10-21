@@ -10,6 +10,7 @@ mGun = function(opts = {}) {
     Gun = class{},
     User = class{},
     Contact = class{},
+    cache = {},
     apiFeaturesBaseGun = [ 'get', 'put', 'set', 'map', 'on', 'off', 'once' ],
     protectedGunProperties = ['#', '>'],
     privateGunProperties = ['!', '$', '?'],
@@ -30,8 +31,14 @@ mGun = function(opts = {}) {
     xTmGun = new xT('mGun', { filter: xTfilter }),
 
     createGunItem = function(inputObject, features = apiFeaturesBaseGun, baseObject = new Gun()) {
-        let 
-        targetObject = Object.assign(
+        if(cached = cache[inputObject['#'].path]) {
+            console.log("CACHED", cached)
+            return cached
+        }
+        let
+        path = inputObject['#'].path,
+        isGunNode = inputObject instanceof Gun,
+        targetObject = isGunNode ? inputObject : Object.assign(
             baseObject, 
             { 
                 ['#']: {}, 
@@ -68,7 +75,14 @@ mGun = function(opts = {}) {
                     return (prop) => target[property][prop] || -1
                 } else if(target['?'].includes(property)) {
                     return (...args) => xTmGun.emit(target, property, ...args)
-                } 
+                } else if(target['__']) {
+                    // handle primitives as workaround...
+                    // https://stackoverflow.com/a/69195285/3470092
+                    let 
+                    prim = Reflect.get(target, '__'),
+                    value = prim[property]
+                    return typeof value === 'function' ? value.bind(prim) : value;
+                }
                 return target[property]
             },
             ownKeys(target) {
@@ -78,41 +92,83 @@ mGun = function(opts = {}) {
         },
         mGunObjectProxy = new Proxy(targetObject, gunObjHandler)
         // trigger timestamp if unset
-        for (prop in mGunObjectProxy) {
-            if(mGunObjectProxy['>'](prop) < 0) {
-                mGunObjectProxy[prop] = mGunObjectProxy[prop]   
+        if(!isGunNode) {
+            for (prop in mGunObjectProxy) {
+                if(mGunObjectProxy['>'](prop) < 0) {
+                    mGunObjectProxy[prop] = mGunObjectProxy[prop]   
+                }
             }
         }
-        return mGunObjectProxy
+        // cache and return proxied object 
+        return cache[path] = mGunObjectProxy
     },
 
     mGunAPI = {
+        cache: function(path) {
+            return path ? cache.get(path) : cache
+        },
         // Storage adapter
         load: function(...args) {
             // get as array of (single) property OR property => value pairs
+            // return primitive OR mGun proxied Node / Gun object
             console.log(arguments.callee.name, args, this['#'], this)
         },
         save: function(...args) {
-            // object -> save as property => value 
-            // primitive -> save as key => value
+            // object -> convert to primitives path + property => value !
+            // primitive -> save as path => value + metadata (timestamp!)
             console.log(arguments.callee.name, args, this['#'], this)
         },
-        merge: function(...args) {
+        merge: function(toMergeNode) {
+            let 
+            proxied = cache[this['#'].path] = createGunItem(this),
+            currentTime = dateNow()
             console.log(arguments.callee.name, args, this['#'], this)
             // merge two mGun Nodes by timestamps...
+            //toMergeNode['>'].forEach(prop => {
+            for(prop in toMergeNode['>']) {
+                if(toMergeNode['>'][prop] > currentTime) {
+                    console.log('ERROR', `Timestamp ${toMergeNode['>'][prop]} is in the future...`)
+                    continue // ignore timestamp in future!!!
+                } else if(toMergeNode['>'][prop] > proxied['>'](prop)) {
+                    if(prop in toMergeNode) {
+                        this[prop] = toMergeNode[prop]
+                    } else {
+                        delete node[prop]
+                    }
+                    this['>'][prop] = toMergeNode['>'][prop]
+                } 
+            }
         },
         // mGun base API features
         /**
          * @todo single node vs nodelist ?
-         * @todo features based on path object?
+         * @todo load / cache Nodes?
+         * @todo load from database...
          */
         get: function(path) {
             console.log(arguments.callee.name, path, this['#'], this)
             path = this['#'].path + GunPathDelimiter + path
+            /*if(cache[path]) {
+                return cache[path]
+            }*/
             return createGunItem( { ['#']: { path: path }, ['>']: {} } )
         },
         put: function(value) {
-            console.log(arguments.callee.name, value, this['#'], this)
+            let proxied = cache[this['#'].path] = createGunItem(this)   // this isn't PROXY !!! And cache written object...
+            console.log(arguments.callee.name, value, this['#'], this, proxied)
+            if(value.constructor !== Object) { // primitive
+                console.log("PRIMITIVE")
+                proxied.__ = value
+                cache[this['#'].path] = proxied
+            } else if(value['>'] || value instanceof Gun) {
+                console.log("mGun compatible")
+                proxied.merge(value)
+            } else {
+                console.log("merge simple JS Object")
+                Object.keys(value).forEach(prop => proxied[prop] = value[prop])
+            }
+            // save to database
+            return proxied
         },
         set: function(item) {
             console.log(arguments.callee.name, item, this['#'], this)
@@ -138,15 +194,16 @@ mGun = function(opts = {}) {
             bornTime = dateNow(),
             pair = restorePair ? await mGunSEA.restore(restorePair) : await mGunSEA.pair(),
             pub = await mGunSEA.exportKey(pair.pub),
-            epub = await mGunSEA.exportKey(pair.epub)
+            epub = await mGunSEA.exportKey(pair.epub),
+            path = '~' + pub
             /**
              * @todo get public params and borntime from storage / remote
              */
             // set alias...
             alias = alias ? alias : pub
-            return createGunItem(
+            return cache[path] = createGunItem(
                 {
-                    ['#']: { soul: '~' + pub, path: '~' + pub },
+                    ['#']: { soul: path, path: path },
                     ['>']: { pub: bornTime, epub: bornTime, alias: bornTime },
                     ['!']: pair,
                     pub: pub,
@@ -206,5 +263,5 @@ mGun = function(opts = {}) {
     Object.entries(mGunAPI).forEach(([feature, action]) => xTmGun.on(feature, action))
 
     // one-time initalization finished, return mGun root object
-    return mGun['$'] = createGunItem( {['#']: { path: globalRoot, soul: globalRoot } }, [ /*...apiFeaturesBaseGun*/'get', 'user' ] )
+    return mGun['$'] = createGunItem( {['#']: { path: globalRoot, soul: globalRoot } }, [ /*...apiFeaturesBaseGun*/'get', 'user', 'cache' ] )
 }
