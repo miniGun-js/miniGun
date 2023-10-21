@@ -60,6 +60,12 @@ n1 = g.get("path").get("to").get("node");
 console.log('mGun GET return', n1);
 n2 = g.get("path.to.node"); // same path as n1
 console.log('mGun GET return', n2);
+
+// modify mGun node
+node = g.get("app.settings");
+node.title = "My App";
+node.put({version: "1.5", build: "21.10.2023", active: 1});
+console.log("NODE", node);
 ```
 
 # ToDo / not implemented
