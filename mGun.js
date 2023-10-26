@@ -1,11 +1,11 @@
 const
-miniGun = () => {
-    if(miniGun['$']) {
-        return miniGun['$']()
+mGun = () => {
+    if(mGun['$']) {
+        return mGun['$']()
     }
     const
     // mSEA Crypto implementation
-    _SEA = miniGun.SEA = mSEA,
+    _SEA = mGun.SEA = mSEA,
     // path of User Root Node
     rootStore = 'global',
     rootPath = '~',
@@ -22,14 +22,14 @@ miniGun = () => {
             return false
         }
     }),
-    _xT = miniGun.xT = new xT('mGun', { filter: xTfilter }),
+    _xT = mGun.xT = new xT('mGun', { filter: xTfilter }),
 
     storeSchema = { keyPath: ['path', 'key'] },
     storeIndexes = [
         [ 'path', 'path', {} ],
         [ 'time', 'time', {} ]
     ],
-    _DB = IDB2('miniGun'),
+    _DB = IDB2('mGun'),
 
     prxHander = {
         get: (target, property) => {
@@ -215,7 +215,7 @@ miniGun = () => {
     Object.entries(apiFeatures).forEach(([feature, action]) => _xT.on(feature, action))
 
     // initialization finished...
-    miniGun['$'] = () => createProxy( { 
+    mGun['$'] = () => createProxy( { 
         '#': rootStore,         // DB table
         '~': rootPath,          // item path
         '>': new Set(),         // changed property tracker
@@ -225,5 +225,5 @@ miniGun = () => {
     })
 
     // expose base object
-    return miniGun['$']()
+    return mGun['$']()
 }
