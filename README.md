@@ -4,6 +4,12 @@ A GunDB and SEA inspired minimal library
 
 **A PoC for testing purposes only!**
 
+# Dependencies
+
+- https://github.com/miniGun-js/xT
+- https://github.com/miniGun-js/mSEA
+- https://github.com/miniGun-js/mIDB
+
 # Usage
 
 Create pairs / users with sign, verify, encrypt and decrypt ist working, but no content and graph features at the moment...
@@ -12,9 +18,26 @@ Executed in browser console.
 // mGun instance
 g = mGun();
 
-// create users
-u1 = await g.user("User1");
-u2 = await g.user("User2");
+// create users, need some ms before create user for init
+u1 = await g.user();
+
+// create second user context / namespace
+g2 = mGun();
+// need short time / ms to initialize before create user...
+u2 = g2.user()
+
+Write entries / nodes to own storage (idb store / table per user!)
+node1 = await u.get("app1");
+node1.title = "My title";
+node1.content = "Content here..."
+
+// save node properties signed to IDB
+node1.save()
+
+// add user properties
+u.alias = "New alias"
+u.age = 100 // add age property with timestamp
+u.save() // persist changes...
 
 // export user, restore as mSEA pair and restore as user
 bkp = await u1.export();
@@ -54,21 +77,9 @@ console.log("CONTACT SIGNED", `match=${verifiedContact2}`);
 contactEnc = await c2.encrypt(text, u2.epub);
 contactDec = await c2.decrypt(contactEnc);
 console.log("CONTACT CRYPT 1:1", text, contactEnc, contactDec);
-
-// mGun "get"
-n1 = g.get("path").get("to").get("node");
-console.log('mGun GET return', n1);
-n2 = g.get("path.to.node"); // same path as n1
-console.log('mGun GET return', n2);
-
-// modify mGun node
-node = g.get("app.settings");
-node.title = "My App";
-node.put({version: "1.5", build: "21.10.2023", active: 1});
-console.log("NODE", node);
 ```
 
 # ToDo / not implemented
-- Storage Adapter and schema
+- ~Storage Adapter and schema~ (indexedDB implemented by [miniGun/mIDB](https://github.com/miniGun-js/mIDB)
 - Gun API features (put, set, map, on, once, off)
 - Remote sync
